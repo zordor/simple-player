@@ -14,6 +14,8 @@ struct PlayerView: View {
     @State private var showBackButton = false
     @State private var hideTask: Task<Void, Never>?
     @State private var bufferedFraction: Double = 0
+    @AppStorage("playerVolume") private var savedVolume: Double = 1.0
+    @AppStorage("playerMuted") private var savedMuted: Bool = false
 
     private let ticker = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -82,7 +84,10 @@ struct PlayerView: View {
             }
         }
         .task(id: videoID) { await load() }
-        .onReceive(ticker) { _ in updateBuffer() }
+        .onReceive(ticker) { _ in
+            updateBuffer()
+            persistVolume()
+        }
         .onExitCommand { model.backToBrowse() }
         .onDisappear {
             hideTask?.cancel()
@@ -123,6 +128,13 @@ struct PlayerView: View {
         bufferedFraction = min(1, max(0, bufferedEnd / total))
     }
 
+    /// Persist the current volume / mute state so it carries across sessions.
+    private func persistVolume() {
+        guard let player else { return }
+        if abs(Double(player.volume) - savedVolume) > 0.001 { savedVolume = Double(player.volume) }
+        if player.isMuted != savedMuted { savedMuted = player.isMuted }
+    }
+
     /// Shows the back button and schedules it to fade out after a short idle, matching the
     /// native floating controls.
     private func revealBackButton() {
@@ -152,6 +164,9 @@ struct PlayerView: View {
             // Keep buffering ahead so playback doesn't stall mid-video. The real speed win is the
             // parallel asset-metadata load in makePlayerItem, not skipping the buffer.
             player.automaticallyWaitsToMinimizeStalling = true
+            // Restore the volume from the previous session.
+            player.volume = Float(savedVolume)
+            player.isMuted = savedMuted
             self.player = player
             player.play()
         } catch {
