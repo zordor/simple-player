@@ -11,7 +11,7 @@ struct SimplePlayerApp: App {
                 .environmentObject(model)
                 .environmentObject(updater)
                 .frame(minWidth: 640, minHeight: 400)
-                .task { updater.checkOnLaunch() }
+                .task { updater.startChecking() }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {

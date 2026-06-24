@@ -16,13 +16,25 @@ final class Updater: ObservableObject {
     @Published var busy = false
 
     private let repo = "zordor/simple-player"
+    private var pollTask: Task<Void, Never>?
+    private var dismissedVersion: String?
 
     var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
     }
 
-    func checkOnLaunch() {
-        Task { await check(announceUpToDate: false) }
+    /// Checks now and then keeps polling in the background, so a release published while the app
+    /// is open is offered live — not only at launch.
+    func startChecking() {
+        guard pollTask == nil else { return }
+        pollTask = Task {
+            await check(announceUpToDate: false)
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15 * 60 * 1_000_000_000)
+                if Task.isCancelled { break }
+                await check(announceUpToDate: false)
+            }
+        }
     }
 
     /// `announceUpToDate` shows a transient "you're current" message (used by the manual menu check).
@@ -31,6 +43,8 @@ final class Updater: ObservableObject {
         if announceUpToDate { status = "Buscando actualizaciones…" }
         do {
             if let info = try await fetchLatest(), isNewer(info.version, than: currentVersion) {
+                // For background polls, don't re-nag about a version the user already dismissed.
+                if !announceUpToDate && info.version == dismissedVersion { return }
                 available = info
                 status = nil
             } else {
@@ -59,6 +73,7 @@ final class Updater: ObservableObject {
     }
 
     func dismiss() {
+        dismissedVersion = available?.version
         available = nil
         status = nil
     }
