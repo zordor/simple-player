@@ -1,5 +1,6 @@
 import SwiftUI
 import AVKit
+import Combine
 
 /// Native, chrome-free playback. Resolves the stream with yt-dlp, builds an AVPlayerItem
 /// (merging separate video+audio tracks when needed) and shows it in an AVPlayerView with
@@ -12,6 +13,9 @@ struct PlayerView: View {
     @State private var errorText: String?
     @State private var showBackButton = false
     @State private var hideTask: Task<Void, Never>?
+    @State private var bufferedFraction: Double = 0
+
+    private let ticker = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -40,8 +44,8 @@ struct PlayerView: View {
                     .foregroundStyle(.white)
             }
 
-            VStack {
-                HStack {
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
                     Button {
                         model.backToBrowse()
                     } label: {
@@ -54,7 +58,12 @@ struct PlayerView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Volver a YouTube (Esc)")
+
                     Spacer()
+
+                    if player != nil, bufferedFraction > 0 {
+                        bufferIndicator
+                    }
                 }
                 Spacer()
             }
@@ -73,12 +82,45 @@ struct PlayerView: View {
             }
         }
         .task(id: videoID) { await load() }
+        .onReceive(ticker) { _ in updateBuffer() }
         .onExitCommand { model.backToBrowse() }
         .onDisappear {
             hideTask?.cancel()
             player?.pause()
             player = nil
         }
+    }
+
+    /// Thin "downloaded ahead" indicator: how much of the whole video is buffered, plus a %.
+    private var bufferIndicator: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.down.circle")
+                .font(.system(size: 12))
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.25))
+                Capsule().fill(.white.opacity(0.9))
+                    .frame(width: max(2, 80 * bufferedFraction))
+            }
+            .frame(width: 80, height: 4)
+            Text("\(Int(bufferedFraction * 100))%")
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.black.opacity(0.55), in: Capsule())
+        .help("Vídeo cargado por delante (búfer)")
+    }
+
+    /// Largest buffered time range / total duration.
+    private func updateBuffer() {
+        guard let item = player?.currentItem else { bufferedFraction = 0; return }
+        let total = item.duration.seconds
+        guard total.isFinite, total > 0 else { return }
+        let bufferedEnd = item.loadedTimeRanges
+            .map { CMTimeGetSeconds($0.timeRangeValue.start) + CMTimeGetSeconds($0.timeRangeValue.duration) }
+            .max() ?? 0
+        bufferedFraction = min(1, max(0, bufferedEnd / total))
     }
 
     /// Shows the back button and schedules it to fade out after a short idle, matching the
@@ -107,8 +149,9 @@ struct PlayerView: View {
             }.value
             let item = try await makePlayerItem(from: streams)
             let player = AVPlayer(playerItem: item)
-            // Start as soon as the first bytes are in rather than pre-buffering — faster perceived start.
-            player.automaticallyWaitsToMinimizeStalling = false
+            // Keep buffering ahead so playback doesn't stall mid-video. The real speed win is the
+            // parallel asset-metadata load in makePlayerItem, not skipping the buffer.
+            player.automaticallyWaitsToMinimizeStalling = true
             self.player = player
             player.play()
         } catch {
