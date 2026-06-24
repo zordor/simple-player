@@ -45,12 +45,25 @@ Or open `SimplePlayer.xcodeproj` in Xcode and hit ⌘R.
 > The app is signed to run locally only. The first launch may need **right-click → Open** to get
 > past Gatekeeper.
 
+## Auto-update
+
+On launch the app checks the latest [GitHub release](https://github.com/zordor/simple-player/releases)
+and, if a newer version exists, shows a discreet banner. One click downloads it, swaps the running
+bundle and relaunches — no manual download. You can also check on demand with **⌘U**.
+
+To cut a new release (bumps the version, builds, tags and publishes the binary):
+
+```bash
+./release.sh 1.2 "What changed"
+```
+
 ## Shortcuts
 
 | Key | Action |
 |-----|--------|
 | `⌘L` | Paste a YouTube URL to play it directly |
 | `Esc` / `⌘[` | Back to the YouTube feed |
+| `⌘U` | Check for updates |
 
 ## Known limitations
 

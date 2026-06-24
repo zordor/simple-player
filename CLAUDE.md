@@ -36,6 +36,7 @@ yt-dlp pueda resolver vídeos personalizados/privados/restringidos.
 | `StreamResolver.swift` | Ejecuta yt-dlp, parsea las URLs (`-g`) |
 | `CookieExporter.swift` | Vuelca cookies del webview a Netscape `cookies.txt` para yt-dlp |
 | `URLBar.swift` | Barra overlay (⌘L) para pegar un enlace; autocompleta del portapapeles |
+| `Updater.swift` | Auto-update vía GitHub Releases: chequea al arrancar (y ⌘U), banner + swap del bundle y relanzado |
 
 Config en `Config/Info.plist` (ATS abierto). Proyecto: `SimplePlayer.xcodeproj` (objectVersion 77,
 grupo sincronizado con el sistema de ficheros → no hay que registrar cada `.swift` a mano).
@@ -55,7 +56,16 @@ open SimplePlayer.xcodeproj
 
 # Ejecutar la app construida
 open ./SimplePlayer.app
+
+# Publicar una versión nueva (bump de versión + build + tag + GitHub Release con el binario)
+# Las apps instaladas la ofrecerán al arrancar (o con ⌘U).
+./release.sh 1.2 "Qué cambió"
 ```
+
+El auto-update consulta `api.github.com/repos/zordor/simple-player/releases/latest`, compara con
+`CFBundleShortVersionString` (= `MARKETING_VERSION`) y, si hay una mayor, descarga el asset `.zip`,
+descomprime con `ditto`, reemplaza el bundle en marcha vía un script `/bin/sh` (espera a que el
+proceso muera → quita quarantine → `mv` → `open`) y se relanza. Repo **público** (descarga sin auth).
 
 ## Atajos
 
