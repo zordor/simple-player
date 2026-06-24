@@ -107,7 +107,8 @@ struct PlayerView: View {
             }.value
             let item = try await makePlayerItem(from: streams)
             let player = AVPlayer(playerItem: item)
-            player.automaticallyWaitsToMinimizeStalling = true
+            // Start as soon as the first bytes are in rather than pre-buffering — faster perceived start.
+            player.automaticallyWaitsToMinimizeStalling = false
             self.player = player
             player.play()
         } catch {
@@ -124,9 +125,12 @@ struct PlayerView: View {
         let videoAsset = AVURLAsset(url: streams.video)
         let audioAsset = AVURLAsset(url: audioURL)
 
-        let duration = try await videoAsset.load(.duration)
-        let videoTracks = try await videoAsset.loadTracks(withMediaType: .video)
-        let audioTracks = try await audioAsset.loadTracks(withMediaType: .audio)
+        // Load video duration + both track lists concurrently (3 parallel round-trips instead
+        // of 3 sequential ones) so playback can begin sooner.
+        async let durationLoad = videoAsset.load(.duration)
+        async let videoTracksLoad = videoAsset.loadTracks(withMediaType: .video)
+        async let audioTracksLoad = audioAsset.loadTracks(withMediaType: .audio)
+        let (duration, videoTracks, audioTracks) = try await (durationLoad, videoTracksLoad, audioTracksLoad)
 
         guard let videoTrack = videoTracks.first, let audioTrack = audioTracks.first else {
             // Couldn't read separate tracks — fall back to the video stream alone.
