@@ -2,6 +2,7 @@
 build/
 DerivedData/
 *.app
+*.zip
 
 # Xcode user state
 xcuserdata/

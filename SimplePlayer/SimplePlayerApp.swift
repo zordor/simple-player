@@ -3,16 +3,25 @@ import SwiftUI
 @main
 struct SimplePlayerApp: App {
     @StateObject private var model = AppModel()
+    @StateObject private var updater = Updater()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(model)
+                .environmentObject(updater)
                 .frame(minWidth: 640, minHeight: 400)
+                .task { updater.checkOnLaunch() }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .appInfo) {
+                Button("Buscar actualizaciones…") {
+                    Task { await updater.check(announceUpToDate: true) }
+                }
+                .keyboardShortcut("u", modifiers: .command)
+            }
             CommandMenu("Reproducir") {
                 Button("Pegar URL de YouTube…") { model.showURLBar.toggle() }
                     .keyboardShortcut("l", modifiers: .command)
@@ -26,6 +35,7 @@ struct SimplePlayerApp: App {
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var updater: Updater
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -43,8 +53,16 @@ struct ContentView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .zIndex(10)
             }
+
+            if updater.available != nil || updater.status != nil {
+                UpdateBanner()
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(20)
+            }
         }
         .ignoresSafeArea()
         .background(Color.black)
+        .animation(.easeInOut(duration: 0.2), value: updater.available?.version)
+        .animation(.easeInOut(duration: 0.2), value: updater.status)
     }
 }
